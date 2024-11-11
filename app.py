@@ -36,8 +36,8 @@ def formatar_datas(df):
     df.index = df.index.map(traduzir_mes)
     return df
 
-# Função para gerar o gráfico de área
-def gerar_grafico_area(df_selected, opcao):
+# Função para gerar o gráfico de área com o total no período
+def gerar_grafico_area(df_selected, opcao, total_periodo):
     fig_area = go.Figure()
 
     fig_area.add_trace(go.Scatter(
@@ -48,6 +48,14 @@ def gerar_grafico_area(df_selected, opcao):
         name=f'{opcao}',
         fillcolor='rgba(30, 144, 255, 0.5)'
     ))
+
+    # Adicionando o total no período dentro do gráfico
+    fig_area.add_annotation(
+        text=f"Total de casos: {total_periodo}",
+        xref="paper", yref="paper",
+        x=0.5, y=0.95, showarrow=False,
+        font=dict(size=16, color="white")
+    )
 
     fig_area.update_layout(
         title=f"Volume de Atendimentos - {opcao}",
@@ -165,15 +173,34 @@ def main():
             with col3:
                 end_date = st.date_input("Selecione a Data Final:", value=data_final, min_value=data_inicial, max_value=data_final, key='end_date', format="DD/MM/YYYY")
 
+            # Aplicar filtros
             df_filtered = aplicar_filtros(df, start_date, end_date, opcao)
             df_grouped = df_filtered.groupby(pd.Grouper(key='Data de abertura', freq='M')).size()
             df_selected = pd.DataFrame({"Volume de Atendimentos": df_grouped})
 
+            # Calcular as métricas
+            total_atendimentos = df_filtered.shape[0]
+            menor_volume = df_selected["Volume de Atendimentos"].min()
+            maior_volume = df_selected["Volume de Atendimentos"].max()
+
+            # Cálculo da porcentagem de variação entre o primeiro e o último período
+            primeiro_periodo = df_selected["Volume de Atendimentos"].iloc[0] if not df_selected.empty else 0
+            ultimo_periodo = df_selected["Volume de Atendimentos"].iloc[-1] if not df_selected.empty else 0
+            variacao_porcentual = ((ultimo_periodo - primeiro_periodo) / primeiro_periodo * 100) if primeiro_periodo != 0 else 0
+            tendencia = "Subiu" if variacao_porcentual > 0 else "Caiu" if variacao_porcentual < 0 else "Estável"
+
+            # Exibir as métricas em linha
+            col4, col5, col6 = st.columns(3)
+            col4.metric(label="Porcentagem de Variação", value=f"{tendencia}: {variacao_porcentual:.2f}%")
+            col5.metric(label="Menor Volume de Atendimentos", value=menor_volume)
+            col6.metric(label="Maior Volume de Atendimentos", value=maior_volume)
+
             # Aplicar tradução de meses
             df_selected = formatar_datas(df_selected)
 
+            # Gerar gráficos
             if not df_selected.empty:
-                gerar_grafico_area(df_selected, opcao)
+                gerar_grafico_area(df_selected, opcao, total_atendimentos)
                 gerar_grafico_linha(df, start_date, end_date, opcoes_operacao)
 
         with tab2:
